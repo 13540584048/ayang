@@ -6,7 +6,7 @@
 #define MAX_QUERY_LENGTH 1024
 #define MAX_BUFFER 512
 
-// Function prototypes
+
 void handle_post_request();
 void handle_get_request() {
     printf("{\"message\":\"GET request handled\"}\n");
@@ -80,14 +80,14 @@ void execute_command(const char *command, char *output, size_t max_size) {
             current_size += len;
         }
     }
-    output[current_size] = '\0'; // Ensure null termination
+    output[current_size] = '\0'; 
     if (pclose(fp) == -1) {
         perror("pclose failed");
     }
 }
 
 void handle_post_request() {
-    char query[MAX_QUERY_LENGTH];
+    char query[MAX_QUERY_LENGTH];//声明查询缓冲区
     size_t content_length;
     char *content_length_str = getenv("CONTENT_LENGTH");
 
@@ -104,24 +104,28 @@ void handle_post_request() {
         return;
     }
 
-    // Read POST data
+    
     size_t bytes_read = fread(query, 1, content_length, stdin);
     if (bytes_read != content_length) {
         fprintf(stderr, "Error: Expected %zu bytes, read %zu bytes\n", content_length, bytes_read);
         printf("{\"error\":1,\"message\":\"Failed to read POST data\"}\n");
         return;
     }
-    query[content_length] = '\0'; // Null-terminate
+    query[content_length] = '\0'; // 对查询字符串进行空字符终止
+	
 
-    // Parse JSON
+	// 将查询字符串解析为 JSON 对象
     struct json_object *myjson = json_tokener_parse(query);
+	// 检查 JSON 是否有效
     if (myjson == NULL) {
         fprintf(stderr, "Error: Invalid JSON\n");
         printf("{\"error\":1,\"message\":\"Invalid JSON\"}\n");
         return;
     }
 
+	// 从 JSON 对象中获取 action 字段
     char *action = json_get_string_value_by_field(myjson, "ACT");
+	// 检查是否存在 action 字段
     if (action == NULL) {
         fprintf(stderr, "Error: Missing action field\n");
         printf("{\"error\":1,\"message\":\"Missing action\"}\n");
@@ -138,9 +142,11 @@ void handle_post_request() {
             return;
         }
 
+	// 从参数中获取 admin 和 pwd 字段
         char *admin = json_get_string_value_by_field(param, "admin");
         char *pwd = json_get_string_value_by_field(param, "pwd");
 
+	// 检查 admin 和 pwd 是否匹配
         if (admin && pwd && strcmp(admin, "admin") == 0 && strcmp(pwd, "123456") == 0) {
             printf("{\"error\":0}\n");
         } else {
@@ -154,12 +160,14 @@ void handle_post_request() {
         char limit[MAX_BUFFER] = {0};
         char leasetime[MAX_BUFFER] = {0};
 
+	// 执行命令以获取 DHCP 配置
         execute_command("uci get network.lan.ipaddr", ipaddr, MAX_BUFFER);
         execute_command("uci get network.lan.netmask", netmask, MAX_BUFFER);
         execute_command("uci get dhcp.lan.start", start, MAX_BUFFER);
         execute_command("uci get dhcp.lan.limit", limit, MAX_BUFFER);
         execute_command("uci get dhcp.lan.leasetime", leasetime, MAX_BUFFER);
 
+	// 创建 JSON 对象并添加 DHCP 配置
         struct json_object *response = json_object_new_object();
         json_object_object_add(response, "ipaddr", json_object_new_string(ipaddr));
         json_object_object_add(response, "netmask", json_object_new_string(netmask));
@@ -171,33 +179,35 @@ void handle_post_request() {
         json_object_put(response);
     }else if (strcmp(action, "GetWiFi") == 0) {
         char ssid[MAX_BUFFER] = {0};
-        char password[MAX_BUFFER] = {0};
-
         
-        execute_command("uci get wireless.@wifi-iface[0].ssid", ssid, MAX_BUFFER);
-        execute_command("uci get wireless.@wifi-iface[0].key", password, MAX_BUFFER);
 
+         // 执行命令以获取 WiFi 配置
+        execute_command("uci get wireless.@wifi-iface[0].ssid", ssid, MAX_BUFFER);
+
+	// 创建 JSON 对象并添加 WiFi 配置
         struct json_object *response = json_object_new_object();
         json_object_object_add(response, "ssid", json_object_new_string(ssid));
-        json_object_object_add(response, "password", json_object_new_string(password));
         json_object_object_add(response, "error", json_object_new_int(0));
 
         printf("%s\n", json_object_to_json_string(response));
         json_object_put(response);
     } else if (strcmp(action, "GetVersion") == 0) {
+ 	// 定义缓冲区，用于存储各类版本信息
         char openwrt[MAX_BUFFER] = {0};
         char kernel[MAX_BUFFER] = {0};
         char fw_version[MAX_BUFFER] = {0};
         char full_fw_version[MAX_BUFFER] = {0};
         char vendor_version[MAX_BUFFER] = {0};
 
-        
+        //获取 OpenWrt 版本
         execute_command("cat /etc/openwrt_version", openwrt, MAX_BUFFER);
+	//以获取内核版本
         execute_command("uname -r", kernel, MAX_BUFFER);
+	// 从配置文件中获取固件版本信息
         get_value_from_config("/etc/system_version.info", "FW_VERSION", fw_version, MAX_BUFFER);
         get_value_from_config("/etc/system_version.info", "FULL_FW_VERSION", full_fw_version, MAX_BUFFER);
         get_value_from_config("/etc/system_version.info", "VENDOR_ASKEY_VERSION", vendor_version, MAX_BUFFER);
-
+	// 创建一个新的 JSON 对象
         struct json_object *response = json_object_new_object();
 
         json_object_object_add(response, "openwrt", json_object_new_string(openwrt));
@@ -205,13 +215,16 @@ void handle_post_request() {
         json_object_object_add(response, "fw_version", json_object_new_string(fw_version)); 
         json_object_object_add(response, "full_fw_version", json_object_new_string(full_fw_version));
         json_object_object_add(response, "vendor_version", json_object_new_string(vendor_version));
-        json_object_object_add(response, "error", json_object_new_int(0));
-
+        
+	json_object_object_add(response, "error", json_object_new_int(0));
+	// 将 JSON 对象转换为字符串并打印输出
         printf("%s\n", json_object_to_json_string(response));
+	// 释放 JSON 对象的内存
         json_object_put(response);
     }else if(!strcmp("SetDHCP", action)){
 	char cmd[512] = {0};
 	int error = 0;
+	// 从 JSON 中获取 DHCP 配置字段
 	char *ipaddr = json_get_string_value_by_field(myjson,"ipaddr");
 	if(ipaddr == NULL)
 	{
@@ -237,7 +250,7 @@ void handle_post_request() {
 	{
 		error += 1;
 	}
-	
+	// 更新 DHCP 配置
 	sprintf(cmd,"uci set network.lan.ipaddr=%s", ipaddr);
 	system(cmd);
 
@@ -257,9 +270,8 @@ void handle_post_request() {
 	sprintf(cmd,"uci set network.lan.leasetime=%s", leasetime);
 	system(cmd);
 
+	// 提交更改，打印有没有更改失败的并且重启网络服务
 	system("uci commit");
-	
-
 	printf("{\"error\":%d}\n", error);  
 	system("/etc/init.d/network restart");
 
@@ -267,18 +279,20 @@ void handle_post_request() {
 else if(!strcmp("Setwifi", action)){
 	char cmde[512] = {0};
 	int errorr = 0;
+	 // 从 JSON 中获取 ssid 字段
 	char *ssid = json_get_string_value_by_field(myjson,"ssid");
 	if(ssid == NULL)
 	{
 		errorr = 1;
 	}
+
+	// 更新 WiFi 配置
 	memset(cmde,0,512);
 	sprintf(cmde,"uci set wireless.ay.ssid=%s", ssid);
 	system(cmde);
 
+	// 提交更改,打印结果并重启 WiFi 服务
 	system("uci commit");
-	
-
 	printf("{\"error\":%d}\n", errorr);  
 	system("wifi &");
 }
@@ -290,40 +304,49 @@ else {
 }
 
 int get_value_from_config(const char *filename, const char *key, char *value, size_t value_size) {
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
+    	// 打开配置文件以进行读取,r是只读
+	FILE *file = fopen(filename, "r");
+	if (file == NULL) {
+	// 如果文件无法打开，输出错误信息
         perror("error opening file");
         return -1;
     }
-    char line[256];
-    int found = 0;
-
-    while (fgets(line, sizeof(line), file) != NULL) {
-        char *delimiter_pos = strchr(line, '=');
-        if (delimiter_pos != NULL) {
-            *delimiter_pos = '\0';
-            char *current_key = line;
-            char *current_value = delimiter_pos + 1;
-
-            char *newline_pos = strchr(current_value, '\n');
-            if (newline_pos != NULL) {
-                *newline_pos = '\0';
-            }
-            if (strcmp(current_key, key) == 0) {
-                if (strlen(current_value) < value_size) {
-                    strncpy(value, current_value, value_size - 1);
-                    value[value_size - 1] = '\0';
-                    found = 1;
-                } else {
-                    found = 0;
-                }
+	// 定义一个缓冲区用于存储每一行内容
+	char line[256];
+	int found = 0;
+	 // 逐行读取配置文件
+	while (fgets(line, sizeof(line), file) != NULL) {
+		// 查找行中的 '=' 分隔符
+		char *delimiter_pos = strchr(line, '=');
+		if (delimiter_pos != NULL) {
+			// 将 '=' 替换为字符串结束符 '\0'
+			*delimiter_pos = '\0';
+			char *current_key = line;// 当前行的键
+			char *current_value = delimiter_pos + 1;// 当前行的值
+			// 查找值中的换行符，并将其替换为字符串结束符
+			char *newline_pos = strchr(current_value, '\n');
+			if (newline_pos != NULL) {
+			*newline_pos = '\0';
+		}
+		// 检查当前行的键是否与目标键匹配
+		if (strcmp(current_key, key) == 0) {
+			// 检查值的长度是否适合目标缓冲区
+			if (strlen(current_value) < value_size) {
+			// 将值复制到目标缓冲区，并确保目标缓冲区以空字符结束
+			strncpy(value, current_value, value_size - 1);
+			value[value_size - 1] = '\0';
+			found = 1;
+			} else {
+				found = 0;
+		}
                 break;
             }
         }
     }
-    fclose(file);
-
-    return found ? 0 : -1;
+ 	// 关闭配置文件
+	fclose(file);
+	// 返回结果：找到键返回 0，否则返回 -1
+	return found ? 0 : -1;
 }
 
     
